@@ -1,0 +1,44 @@
+services:
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.6
+    command: start-dev --health-enabled=true
+    environment:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
+      # Pin the issuer URL to localhost so tokens issued by Keycloak match
+      # the URL that the locally-running JupyterHub reaches it on.
+      KC_HOSTNAME: http://localhost:8080
+    ports:
+      - "8080:8080"
+    volumes:
+      - keycloak_data:/opt/keycloak/data
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/localhost/9000 && echo -e 'GET /health/ready HTTP/1.0\\r\\nHost: localhost\\r\\n\\r\\n' >&3 && timeout 3 cat <&3 | grep -q UP"]
+      interval: 15s
+      timeout: 10s
+      retries: 15
+      start_period: 60s
+
+  keycloak-config:
+    image: adorsys/keycloak-config-cli:latest-26
+    depends_on:
+      keycloak:
+        condition: service_healthy
+    environment:
+      KEYCLOAK_URL: http://keycloak:8080
+      KEYCLOAK_USER: admin
+      KEYCLOAK_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
+      KEYCLOAK_AVAILABILITYCHECK_ENABLED: "true"
+      IMPORT_FILES_LOCATIONS: /config/keycloak-config.yaml
+      IMPORT_VAR_SUBSTITUTION_ENABLED: "true"
+      STAGING_HUB_URL: ${STAGING_HUB_URL}
+      STAGING_CLIENT_SECRET: ${STAGING_CLIENT_SECRET}
+      PROD_HUB_URL: ${PROD_HUB_URL}
+      PROD_CLIENT_SECRET: ${PROD_CLIENT_SECRET}
+    volumes:
+      - .:/config
+
+
+volumes:
+  keycloak_data:

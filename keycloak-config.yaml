@@ -1,0 +1,413 @@
+enabled: true
+realm: test-realm
+displayName: Test Realm for JupyterHub
+
+clients:
+  - clientId: jupyterhub-staging
+    name: JupyterHub (Staging)
+    rootUrl: $(env:STAGING_HUB_URL)
+    secret: $(env:STAGING_CLIENT_SECRET)
+    redirectUris:
+      - $(env:STAGING_HUB_URL)/hub/oauth_callback
+    webOrigins:
+      - $(env:STAGING_HUB_URL)
+    protocol: openid-connect
+    defaultClientScopes:
+      - basic
+      - profile
+      - email
+    protocolMappers:
+      # Puts client roles into the token as a top-level "roles" claim
+      - name: client-roles-claim
+        protocol: openid-connect
+        protocolMapper: oidc-usermodel-client-role-mapper
+        config:
+          userinfo.token.claim: "true"
+          claim.name: roles
+          jsonType.label: String
+          multivalued: "true"
+          usermodel.clientRoleMapping.clientId: jupyterhub-staging
+      # Puts full group paths into the token as a "groups" claim
+      - name: groups-claim
+        protocol: openid-connect
+        protocolMapper: oidc-group-membership-mapper
+        config:
+          userinfo.token.claim: "true"
+          claim.name: groups
+          jsonType.label: String
+          multivalued: "true"
+          full.path: "true"
+
+  - clientId: jupyterhub-prod
+    name: JupyterHub (Prod)
+    rootUrl: $(env:PROD_HUB_URL)
+    secret: $(env:PROD_CLIENT_SECRET)
+    redirectUris:
+      - $(env:PROD_HUB_URL)/hub/oauth_callback
+    webOrigins:
+      - $(env:PROD_HUB_URL)
+    protocol: openid-connect
+    defaultClientScopes:
+      - basic
+      - profile
+      - email
+    protocolMappers:
+      - name: client-roles-claim
+        protocol: openid-connect
+        protocolMapper: oidc-usermodel-client-role-mapper
+        config:
+          userinfo.token.claim: "true"
+          claim.name: roles
+          jsonType.label: String
+          multivalued: "true"
+          usermodel.clientRoleMapping.clientId: jupyterhub-prod
+      - name: groups-claim
+        protocol: openid-connect
+        protocolMapper: oidc-group-membership-mapper
+        config:
+          userinfo.token.claim: "true"
+          claim.name: groups
+          jsonType.label: String
+          multivalued: "true"
+          full.path: "true"
+
+roles:
+  # Realm-scoped tenant roles — represent org identity for billing/cost tracking.
+  # These do NOT grant compute access; they are consumed by downstream systems for attribution.
+  realm:
+    - name: tenant:veda
+      description: Veda tenant
+    - name: tenant:veda/team-1
+      description: Team 1 in the Veda tenant
+      composites:
+        realm:
+          - tenant:veda
+    - name: tenant:veda/team-2
+      description: Team 2 in the Veda tenant
+      composites:
+        realm:
+          - tenant:veda
+    - name: tenant:disasters
+      description: Disasters tenant
+    - name: tenant:classroom
+      description: Classroom tenant
+    - name: tenant:classroom/students
+      description: Students in the Classroom tenant
+      composites:
+        realm:
+          - tenant:classroom
+    - name: tenant:classroom/TAs
+      description: TAs in the Classroom tenant
+      composites:
+        realm:
+          - tenant:classroom
+    - name: tenant:classroom/instructors
+      description: Instructors in the Classroom tenant
+      composites:
+        realm:
+          - tenant:classroom
+    - name: tenant:research
+      description: Research tenant
+    - name: tenant:research/project-alpha
+      description: Project Alpha in the Research tenant
+      composites:
+        realm:
+          - tenant:research
+    - name: tenant:research/project-beta
+      description: Project Beta in the Research tenant
+      composites:
+        realm:
+          - tenant:research
+    - name: tenant:research/professors
+      description: Professors in the Research tenant
+      composites:
+        realm:
+          - tenant:research
+
+  # Client-scoped capability roles — control compute access within a specific hub instance.
+  # The client provides the namespace, so names stay simple. Assignments on jupyterhub-staging
+  # and jupyterhub-prod are fully independent.
+  client:
+    jupyterhub-staging:
+      - name: basic-user
+        description: Access to standard compute profiles
+      - name: power-user
+        description: Access to large memory / high CPU profiles
+        composites:
+          client:
+            jupyterhub-staging:
+              - basic-user
+      - name: gpu-user
+        description: Access to GPU profiles
+        composites:
+          client:
+            jupyterhub-staging:
+              - basic-user
+      - name: admin
+        description: JupyterHub admin panel access
+        composites:
+          client:
+            jupyterhub-staging:
+              - basic-user
+              - power-user
+
+    jupyterhub-prod:
+      - name: basic-user
+        description: Access to standard compute profiles
+      - name: power-user
+        description: Access to large memory / high CPU profiles
+        composites:
+          client:
+            jupyterhub-prod:
+              - basic-user
+      - name: gpu-user
+        description: Access to GPU profiles
+        composites:
+          client:
+            jupyterhub-prod:
+              - basic-user
+      - name: admin
+        description: JupyterHub admin panel access
+        composites:
+          client:
+            jupyterhub-prod:
+              - basic-user
+              - power-user
+
+groups:
+  # Capability groups — grant compute access for a specific hub environment.
+  # Membership in /JupyterHub/Staging/* has no effect on prod and vice versa.
+  - name: JupyterHub
+    subGroups:
+      - name: Staging
+        subGroups:
+          - name: Basic Users
+            clientRoles:
+              jupyterhub-staging:
+                - basic-user
+          - name: Power Users
+            clientRoles:
+              jupyterhub-staging:
+                - power-user
+          - name: GPU Users
+            clientRoles:
+              jupyterhub-staging:
+                - gpu-user
+          - name: Admins
+            clientRoles:
+              jupyterhub-staging:
+                - admin
+      - name: Prod
+        subGroups:
+          - name: Basic Users
+            clientRoles:
+              jupyterhub-prod:
+                - basic-user
+          - name: Power Users
+            clientRoles:
+              jupyterhub-prod:
+                - power-user
+          - name: GPU Users
+            clientRoles:
+              jupyterhub-prod:
+                - gpu-user
+          - name: Admins
+            clientRoles:
+              jupyterhub-prod:
+                - admin
+
+  # Default group — new users land here; can authenticate but have no compute access.
+  - name: No Access
+
+  # Tenant groups — represent real-world org structure for billing/cost tracking.
+  # These grant only tenant:* realm roles. Compute access is managed separately
+  # via /JupyterHub/<Env>/* groups.
+  - name: Tenants
+    subGroups:
+      - name: veda
+        realmRoles:
+          - tenant:veda
+        subGroups:
+          - name: team-1
+            realmRoles:
+              - tenant:veda/team-1
+          - name: team-2
+            realmRoles:
+              - tenant:veda/team-2
+      - name: disasters
+        realmRoles:
+          - tenant:disasters
+      - name: classroom
+        realmRoles:
+          - tenant:classroom
+        subGroups:
+          - name: students
+            realmRoles:
+              - tenant:classroom/students
+          - name: TAs
+            realmRoles:
+              - tenant:classroom/TAs
+          - name: instructors
+            realmRoles:
+              - tenant:classroom/instructors
+      - name: research
+        realmRoles:
+          - tenant:research
+        subGroups:
+          - name: project-alpha
+            realmRoles:
+              - tenant:research/project-alpha
+          - name: project-beta
+            realmRoles:
+              - tenant:research/project-beta
+          - name: professors
+            realmRoles:
+              - tenant:research/professors
+
+defaultGroups:
+  - "/No Access"
+
+# Test users — all provisioned against staging.
+# Each user has an explicit capability group assignment (what they can do)
+# and a tenant group assignment (who they are / billing attribution), separately.
+users:
+  - username: basic-user-test
+    email: basic@example.com
+    firstName: Basic
+    lastName: User
+    enabled: true
+    credentials:
+      - type: password
+        value: password
+        temporary: false
+    groups:
+      - "/JupyterHub/Staging/Basic Users"
+      - "/Tenants/veda/team-1"
+
+  - username: power-user-test
+    email: power@example.com
+    firstName: Power
+    lastName: User
+    enabled: true
+    credentials:
+      - type: password
+        value: password
+        temporary: false
+    groups:
+      - "/JupyterHub/Staging/Power Users"
+      - "/Tenants/veda/team-2"
+
+  - username: gpu-user-test
+    email: gpu@example.com
+    firstName: GPU
+    lastName: User
+    enabled: true
+    credentials:
+      - type: password
+        value: password
+        temporary: false
+    groups:
+      - "/JupyterHub/Staging/GPU Users"
+      - "/Tenants/disasters"
+
+  - username: admin-test
+    email: admin@example.com
+    firstName: Admin
+    lastName: User
+    enabled: true
+    credentials:
+      - type: password
+        value: password
+        temporary: false
+    groups:
+      - "/JupyterHub/Staging/Admins"
+
+  - username: no-access-test
+    email: noaccess@example.com
+    firstName: NoAccess
+    lastName: User
+    enabled: true
+    credentials:
+      - type: password
+        value: password
+        temporary: false
+    groups:
+      - "/No Access"
+
+  - username: student-user
+    email: student@example.com
+    firstName: Student
+    lastName: User
+    enabled: true
+    credentials:
+      - type: password
+        value: password
+        temporary: false
+    groups:
+      - "/JupyterHub/Staging/Basic Users"
+      - "/Tenants/classroom/students"
+
+  - username: ta-user
+    email: ta@example.com
+    firstName: TA
+    lastName: User
+    enabled: true
+    credentials:
+      - type: password
+        value: password
+        temporary: false
+    groups:
+      - "/JupyterHub/Staging/Power Users"
+      - "/Tenants/classroom/TAs"
+
+  - username: instructor-user
+    email: instructor@example.com
+    firstName: Instructor
+    lastName: User
+    enabled: true
+    credentials:
+      - type: password
+        value: password
+        temporary: false
+    groups:
+      - "/JupyterHub/Staging/Admins"
+      - "/Tenants/classroom/instructors"
+
+  - username: project-alpha-researcher
+    email: alpha@example.com
+    firstName: Project
+    lastName: Alpha Researcher
+    enabled: true
+    credentials:
+      - type: password
+        value: password
+        temporary: false
+    groups:
+      - "/JupyterHub/Staging/Power Users"
+      - "/Tenants/research/project-alpha"
+
+  - username: project-beta-researcher
+    email: beta@example.com
+    firstName: Project
+    lastName: Beta Researcher
+    enabled: true
+    credentials:
+      - type: password
+        value: password
+        temporary: false
+    groups:
+      - "/JupyterHub/Staging/GPU Users"
+      - "/Tenants/research/project-beta"
+
+  - username: professor-researcher
+    email: prof@example.com
+    firstName: Professor
+    lastName: Researcher
+    enabled: true
+    credentials:
+      - type: password
+        value: password
+        temporary: false
+    groups:
+      - "/JupyterHub/Staging/Admins"
+      - "/Tenants/research/professors"

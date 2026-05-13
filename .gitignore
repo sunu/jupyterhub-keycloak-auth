@@ -1,0 +1,8 @@
+.env
+__pycache__/
+*.pyc
+*.sqlite
+*.log
+jupyterhub_cookie_secret
+jupyterhub-proxy.pid
+.venv/

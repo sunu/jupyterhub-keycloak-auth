@@ -1,0 +1,5 @@
+jupyterhub
+oauthenticator
+jupyterlab
+jupyterhub-kubespawner>=7.0.0
+jupyterhub-fancy-profiles
