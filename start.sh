@@ -9,7 +9,6 @@ if [[ ! -f "$ENV_FILE" ]]; then
   exit 1
 fi
 
-# shellcheck source=/dev/null
 set -a; source "$ENV_FILE"; set +a
 
 export KEYCLOAK_CLIENT_SECRET="${STAGING_CLIENT_SECRET:?STAGING_CLIENT_SECRET must be set in .env}"
